@@ -17,15 +17,18 @@ CORS(app)
 # 모델 경로 설정
 BASE_DIR = Path(__file__).resolve().parent
 
-# MediaPipe 초기화
+# MediaPipe 초기화 (CPU 전용 모드)
+os.environ['GLOG_minloglevel'] = '2'  # MediaPipe 로그 줄이기
 mp_face_mesh = mp.solutions.face_mesh
 mp_face_detection = mp.solutions.face_detection
 face_mesh = mp_face_mesh.FaceMesh(
     static_image_mode=False,
     max_num_faces=2,
-    min_detection_confidence=0.5
+    min_detection_confidence=0.5,
+    refine_landmarks=False  # GPU 사용 안 함
 )
 face_detection = mp_face_detection.FaceDetection(
+    model_selection=0,  # 0=short-range, 1=full-range (CPU 친화적)
     min_detection_confidence=0.5
 )
 
