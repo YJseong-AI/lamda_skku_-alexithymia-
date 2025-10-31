@@ -11,10 +11,14 @@ ENV/
 
 # 모델 파일 (용량 큰 파일)
 *.pkl
-*.hdf5
-*.dat
-*.pth
-*.ckpt
+L2CSNet_gaze360.pkl
+fer2013_model.pth
+# shape_predictor는 자동 다운로드되므로 제외
+models/shape_predictor_68_face_landmarks.dat
+models/*.bz2
+
+# 감정 모델은 포함 (크기가 작아서)
+# _mini_XCEPTION.102-0.66.hdf5 는 포함
 
 # 데이터 폴더
 data/
@@ -36,4 +40,12 @@ Thumbs.db
 
 # CSV 데이터
 *.csv
+
+# GazeTracking 하위 폴더 중 불필요한 것들
+GazeTracking/gaze_tracking/trained_models/
+GazeTracking/__pycache__/
+GazeTracking/gaze_tracking/__pycache__/
+
+# 기타
+.git
 
