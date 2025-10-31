@@ -206,6 +206,17 @@ function displayResults(result) {
                     <span>상태</span>
                     <span>${result.fixation_flag === 1 ? '⚠️ 불안정' : '✅ 안정'}</span>
                 </div>
+                ${result.distracted ? `
+                <div class="info-item" style="color: red; font-weight: bold;">
+                    <span colspan="2">🚨 DISTRACTED SEGMENT!</span>
+                </div>
+                ` : ''}
+                ${result.elapsed_time ? `
+                <div class="info-item">
+                    <span>경과 시간</span>
+                    <span>${result.elapsed_time.toFixed(1)}초</span>
+                </div>
+                ` : ''}
             </div>
         `;
     }

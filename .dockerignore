@@ -1,0 +1,40 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+menv/
+env/
+venv/
+ENV/
+
+# 데이터 폴더
+data/
+GazeTracking/data/
+
+# IDE
+.vscode/
+.idea/
+
+# 비디오
+*.mp4
+*.avi
+
+# CSV
+*.csv
+
+# 불필요한 모델
+L2CSNet_gaze360.pkl
+fer2013_model.pth
+
+# Railway/기타
+nixpacks.toml
+Procfile
+runtime.txt
+Dockerfile
+
