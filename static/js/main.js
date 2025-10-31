@@ -3,6 +3,9 @@ let canvas = document.getElementById('overlay');
 let ctx = canvas.getContext('2d');
 let streaming = false;
 let analyzeInterval = null;
+let sessionId = 'session_' + Date.now();
+let userEventPressed = false;
+let blinkCount = 0;
 
 async function startCamera() {
     try {
@@ -74,7 +77,10 @@ async function analyzeFrame() {
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ image: imageData })
+            body: JSON.stringify({ 
+                image: imageData,
+                session_id: sessionId
+            })
         });
         
         const result = await response.json();
@@ -176,6 +182,10 @@ function displayResults(result) {
                     <span>${face.is_blinking ? '😑 감은 상태' : '👁️ 뜬 상태'}</span>
                 </div>
                 <div class="info-item">
+                    <span>깜빡임 횟수</span>
+                    <span>${result.blink_count || 0}회</span>
+                </div>
+                <div class="info-item">
                     <span>EAR 값</span>
                     <span>${face.ear.toFixed(3)}</span>
                 </div>
@@ -183,8 +193,44 @@ function displayResults(result) {
         `;
     });
     
+    // Fixation Stability 정보 추가
+    if (result.fixation_stability !== null) {
+        html += `
+            <div class="result-card">
+                <h3>🎯 Fixation Stability</h3>
+                <div class="info-item">
+                    <span>Stability</span>
+                    <span>${result.fixation_stability.toFixed(3)}</span>
+                </div>
+                <div class="info-item">
+                    <span>상태</span>
+                    <span>${result.fixation_flag === 1 ? '⚠️ 불안정' : '✅ 안정'}</span>
+                </div>
+            </div>
+        `;
+    }
+    
     resultsDiv.innerHTML = html;
 }
+
+// Enter 키 이벤트 처리 (url.py와 동일)
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && streaming) {
+        userEventPressed = true;
+        const timestamp = new Date().toLocaleTimeString();
+        console.log(`[User Event] ${timestamp}`);
+        
+        // 사용자 이벤트 표시
+        const statusDiv = document.getElementById('status');
+        statusDiv.textContent = `✅ 사용자 이벤트 기록됨 (${timestamp})`;
+        statusDiv.style.background = '#c8e6c9';
+        
+        setTimeout(() => {
+            statusDiv.textContent = '✅ 카메라 실행 중 - 분석 진행중...';
+            statusDiv.style.background = '#e8f4f8';
+        }, 2000);
+    }
+});
 
 // 페이지 로드 시 상태 확인
 fetch('/health')

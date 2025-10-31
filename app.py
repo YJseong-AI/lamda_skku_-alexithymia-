@@ -65,8 +65,36 @@ def calculate_ear_mediapipe(landmarks, eye_indices):
     ear = (vertical1 + vertical2) / (2.0 * horizontal)
     return ear
 
-def process_frame(image_data):
-    """프레임 처리 및 분석"""
+def calculate_fixation_stability(gaze_points):
+    """Fixation Stability 계산 (url.py와 동일)"""
+    if len(gaze_points) < 2:
+        return None, None
+    
+    points = np.array(gaze_points)
+    if points.shape[0] < 2:
+        return None, None
+    
+    cov_matrix = np.cov(points.T)
+    if cov_matrix.shape == ():
+        cov_matrix = np.array([[cov_matrix]])
+    elif cov_matrix.shape == (2,):
+        cov_matrix = np.diag(cov_matrix)
+    
+    eigenvalues = np.linalg.eigvals(cov_matrix)
+    eigenvalues = np.real(eigenvalues)
+    eigenvalues = np.sort(eigenvalues)[::-1]
+    
+    if len(eigenvalues) < 2:
+        eigenvalues = np.pad(eigenvalues, (0, 2-len(eigenvalues)), 'constant')
+    
+    lambda1, lambda2 = eigenvalues[0], eigenvalues[1]
+    area = np.pi * np.sqrt(max(lambda1, 0)) * np.sqrt(max(lambda2, 0))
+    fix_stab = 1 / (1 + area)
+    
+    return area, fix_stab
+
+def process_frame(image_data, session_data=None):
+    """프레임 처리 및 분석 (url.py 로직 반영)"""
     try:
         # Base64 이미지 디코딩
         image_bytes = base64.b64decode(image_data.split(',')[1])
@@ -86,7 +114,9 @@ def process_frame(image_data):
         
         result = {
             "faces_detected": 0,
-            "faces": []
+            "faces": [],
+            "fixation_stability": None,
+            "fixation_flag": 0
         }
         
         if detection_results.detections and mesh_results.multi_face_landmarks:
@@ -103,8 +133,8 @@ def process_frame(image_data):
                 landmarks = [(lm.x * w, lm.y * h) for lm in face_landmarks.landmark]
                 
                 # 눈 인덱스 (MediaPipe Face Mesh)
-                LEFT_EYE = [33, 160, 158, 133, 153, 144]  # 왼쪽 눈
-                RIGHT_EYE = [362, 385, 387, 263, 373, 380]  # 오른쪽 눈
+                LEFT_EYE = [33, 160, 158, 133, 153, 144]
+                RIGHT_EYE = [362, 385, 387, 263, 373, 380]
                 
                 # 동공 위치 (눈 중심)
                 left_pupil = np.mean([landmarks[i] for i in LEFT_EYE], axis=0)
@@ -115,6 +145,27 @@ def process_frame(image_data):
                 right_ear = calculate_ear_mediapipe(landmarks, RIGHT_EYE)
                 avg_ear = (left_ear + right_ear) / 2.0
                 is_blinking = avg_ear < 0.2
+                
+                # Fixation Stability 계산 (session_data에서 gaze_buffer 받음)
+                fix_stab = None
+                fix_flag = 0
+                if session_data and 'gaze_buffer' in session_data:
+                    # IPD 정규화된 시선 좌표 계산
+                    ipd = np.sqrt((left_pupil[0] - right_pupil[0])**2 + (left_pupil[1] - right_pupil[1])**2)
+                    if ipd > 0:
+                        gaze_x = ((left_pupil[0] + right_pupil[0]) / 2) / ipd
+                        gaze_y = ((left_pupil[1] + right_pupil[1]) / 2) / ipd
+                        
+                        gaze_buffer = session_data['gaze_buffer']
+                        gaze_buffer.append((gaze_x, gaze_y))
+                        
+                        if len(gaze_buffer) >= 10:  # 최소 10프레임
+                            area, fix_stab = calculate_fixation_stability(list(gaze_buffer))
+                            if fix_stab is not None:
+                                result["fixation_stability"] = float(fix_stab)
+                                # 불안정 플래그 (임계값: 0.3)
+                                fix_flag = 1 if fix_stab <= 0.3 else 0
+                                result["fixation_flag"] = fix_flag
                 
                 face_data = {
                     "bbox": {
@@ -164,17 +215,51 @@ def index():
     """메인 페이지"""
     return render_template('index.html')
 
+# 세션 데이터 저장 (간단한 메모리 기반)
+from collections import deque as deque_collection
+session_storage = {}
+
 @app.route('/analyze', methods=['POST'])
 def analyze():
-    """프레임 분석 API"""
+    """프레임 분석 API (url.py 로직 반영)"""
     data = request.json
     image_data = data.get('image')
+    session_id = data.get('session_id', 'default')
     
     if not image_data:
         return jsonify({"error": "No image data provided"}), 400
     
-    result = process_frame(image_data)
+    # 세션 데이터 초기화 또는 가져오기
+    if session_id not in session_storage:
+        session_storage[session_id] = {
+            'gaze_buffer': deque_collection(maxlen=40),  # 2초 @ 20fps
+            'blink_count': 0,
+            'was_blinking': False
+        }
+    
+    session_data = session_storage[session_id]
+    
+    # 프레임 처리
+    result = process_frame(image_data, session_data)
+    
+    # 깜빡임 카운트 업데이트
+    if result['faces_detected'] > 0:
+        is_blinking = result['faces'][0]['is_blinking']
+        if not session_data['was_blinking'] and is_blinking:
+            session_data['blink_count'] += 1
+        session_data['was_blinking'] = is_blinking
+        result['blink_count'] = session_data['blink_count']
+    
     return jsonify(result)
+
+@app.route('/reset_session', methods=['POST'])
+def reset_session():
+    """세션 초기화"""
+    data = request.json
+    session_id = data.get('session_id', 'default')
+    if session_id in session_storage:
+        del session_storage[session_id]
+    return jsonify({"status": "ok"})
 
 @app.route('/health')
 def health():
