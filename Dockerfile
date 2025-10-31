@@ -6,12 +6,16 @@ WORKDIR /app
 
 # 시스템 패키지 업데이트 및 필수 라이브러리 설치
 RUN apt-get update && apt-get install -y \
-    libgl1-mesa-glx \
+    libgl1 \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
     libxrender-dev \
     libgomp1 \
+    ffmpeg \
+    libavcodec-dev \
+    libavformat-dev \
+    libswscale-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Python 의존성 파일 복사
