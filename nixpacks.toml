@@ -1,0 +1,9 @@
+[phases.setup]
+nixPkgs = ["python311", "libGL", "glib", "libxcrypt"]
+
+[phases.install]
+cmds = ["pip install -r requirements.txt"]
+
+[start]
+cmd = "gunicorn app:app"
+
